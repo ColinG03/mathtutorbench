@@ -12,4 +12,4 @@ ground_truth_format: "{{ answer }}"
 few_shot_samples: |
   Problem: Janet's ducks lay 16 eggs per day. She eats three for breakfast every morning and sells the rest at the farmers market daily for $2 per egg. How much in dollars does she make per day at the farmers market?
   Questions: How many eggs does Janet sell? How much does Janet make at the farmers' market?
-stop: ["Problem:", "\n"]
+stop: [] # removed "Problem:" and "\n" from stop tokens because these are always in the thinking block, and sometimes in the thinking they restate the problem

@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 import jinja2
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+import re
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import google.generativeai as genai
 from openai import OpenAI, api_key
 from enum import Enum
@@ -37,18 +39,6 @@ class LLMConfig:
         #     raise ValueError("base_url is required for CompletionAPI provider")
         if self.provider == ProviderType.GEMINI and not self.api_key:
             raise ValueError("api_key is required for Gemini provider")
-
-
-def create_llm_model(config: LLMConfig) -> 'BaseLLMAPI':
-    """Factory function to create LLM model instance based on provider"""
-    if config.provider == ProviderType.COMPLETION_API:
-        return CompletionAPI(config)
-    elif config.provider == ProviderType.OLLAMA:
-        return OllamaAPI(config)
-    elif config.provider == ProviderType.GEMINI:
-        return GeminiAPI(config)
-    else:
-        raise ValueError(f"Unsupported provider: {config.provider}")
 
 
 def create_llm_model(config: LLMConfig) -> 'BaseLLMAPI':
@@ -149,7 +139,7 @@ class CompletionAPI(BaseLLMAPI):
             print(f"Available models {models}")
             self.config.model = models.data[0].id
         else:
-            self.client = OpenAI(api_key=config.api_key)
+            self.client = OpenAI(api_key=config.api_key, base_url=config.base_url)
 
 
     @retry(
@@ -181,8 +171,9 @@ class CompletionAPI(BaseLLMAPI):
             raise
 
     @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
+        stop=stop_after_attempt(10),
+        wait=wait_exponential(multiplier=2, min=10, max=300),
+        retry=retry_if_exception_type((Exception,)),
         reraise=True
     )
     def _make_chat_request(self, messages: List[Dict], stop: Optional[List[str]] = None) -> str:
@@ -200,6 +191,23 @@ class CompletionAPI(BaseLLMAPI):
                 stop=stop
             )
             completion = response.choices[0].message.content
+            print(f"COMPLETION: {completion}")
+            # Extract thinking tokens for Qwen models
+            if self.config.model and ('qwen' in self.config.model.lower() or 'kimi' in self.config.model.lower()):
+                # Find all thinking tokens between <think></think>
+                thinking_pattern = r'<think>(.*?)</think>'
+                thinking_tokens = re.findall(thinking_pattern, completion, re.DOTALL)
+                
+                if thinking_tokens:
+                    print("===========================(Thinking-tokens-start)===================================")
+                    for i, thinking in enumerate(thinking_tokens, 1):
+                        print(f"Thinking token {i}:")
+                        print(thinking)
+                    print("===========================(Thinking-tokens-end)===================================")
+                    
+                    # Remove thinking tokens from completion
+                    completion = re.sub(thinking_pattern, '', completion, flags=re.DOTALL).strip()
+            
             print("===========================(Response-chat-start)===================================")
             print(completion)
             print("===========================(Response-chat-end)===================================")
@@ -208,6 +216,38 @@ class CompletionAPI(BaseLLMAPI):
         except Exception as e:
             print("Error in chat request: " + str(e))
             raise
+
+    def generate_batch(
+        self,
+        batch_items: List[Dict[str, Any]],
+        max_workers: int = 5
+    ) -> List[Optional[str]]:
+        """Generate completions for multiple items concurrently"""
+        results = {}
+        
+        def generate_one(item_idx, item):
+            try:
+                return item_idx, self.generate(
+                    messages=item["messages"],
+                    system_prompt=item["system_prompt"],
+                    stop=item.get("stop")
+                )
+            except Exception as e:
+                print(f"Error in batch item {item_idx}: {e}")
+                return item_idx, None
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(generate_one, idx, item): idx 
+                for idx, item in enumerate(batch_items)
+            }
+            
+            for future in as_completed(futures):
+                item_idx, result = future.result()
+                results[item_idx] = result
+        
+        # Return results in original order
+        return [results[i] for i in sorted(results.keys())]
 
 
 class OllamaAPI(BaseLLMAPI):

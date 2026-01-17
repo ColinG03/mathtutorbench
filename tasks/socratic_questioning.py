@@ -13,9 +13,11 @@ class SocraticQuestioningTask(Task):
     def parse_response(self, response: str) -> List[str]:
         """Extract questions from the model's response"""
         questions = []
-        for line in response.split('\n'):
-            line = line.strip()
-            questions.append(line)
+        # Split on '?' since questions are on one line separated by question marks
+        for question in response.split('?'):
+            question = question.strip()
+            if question:  # Only add non-empty questions
+                questions.append(question + '?')  # Add back the '?' that was removed by split
         return questions
 
 
