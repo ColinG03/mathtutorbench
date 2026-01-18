@@ -1,8 +1,18 @@
 import argparse
 import json
+import os
 from pathlib import Path
 import yaml
 from typing import Dict, Any
+
+# Load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+except ImportError:
+    pass  # python-dotenv not installed, skip
 
 from models.completion_api import create_llm_model, LLMConfig
 from tasks.base import TaskConfig
@@ -17,7 +27,16 @@ def parse_model_args(args_str: str) -> Dict[str, Any]:
 
     args_dict = {}
     for pair in args_str.split(','):
-        key, value = pair.split('=')
+        key, value = pair.split('=', 1)  # Use split with maxsplit=1 to handle values with '='
+        value = value.strip()
+        
+        # Handle environment variable placeholders like <API_KEY>
+        if value.startswith('<') and value.endswith('>'):
+            env_var = value[1:-1]  # Remove < and >
+            value = os.environ.get(env_var, '')
+            if not value:
+                print(f"Warning: Environment variable {env_var} not set")
+        
         # Convert string values to appropriate types
         if value.lower() == 'true':
             value = True
@@ -79,6 +98,12 @@ def main():
     # Parse model arguments
     model_args = parse_model_args(args.model_args)
     model_args['provider'] = args.provider
+    
+    # If api_key is not provided or is empty, try to get it from environment
+    if 'api_key' not in model_args or not model_args.get('api_key'):
+        api_key = os.environ.get('TINKER_API_KEY') or os.environ.get('API_KEY')
+        if api_key:
+            model_args['api_key'] = api_key
 
     # Create config and model
     config = LLMConfig(**model_args)
@@ -131,10 +156,17 @@ def main():
             # Process examples in batches
             batch_size = args.batch_size
             
-            for batch_start in tqdm(range(0, len(remaining_examples), batch_size),
-                                   desc=f"Processing batches for {task_config.name}",
-                                   initial=len(completed_indices),
-                                   total=len(test_examples)):
+            # Progress bar shows examples processed
+            pbar = tqdm(total=len(test_examples),
+                       desc=f"Processing {task_config.name}",
+                       unit="example",
+                       miniters=1)
+            # Set initial position if resuming from checkpoint
+            if len(completed_indices) > 0:
+                pbar.n = len(completed_indices)
+                pbar.refresh()
+            
+            for batch_start in range(0, len(remaining_examples), batch_size):
                 batch = remaining_examples[batch_start:batch_start + batch_size]
                 
                 # Prepare batch items
@@ -184,6 +216,7 @@ def main():
                         print(formatted_ground_truth)
                         targets.append(formatted_ground_truth)
                         completed_indices.add(original_idx)
+                        pbar.update(1)  # Update progress by 1 example
                         
                         if "pedagogy" in task_config.name or 'scaffolding' in task_config.name:
                             generation = {
@@ -204,6 +237,9 @@ def main():
                     print("Saving checkpoint before exiting...")
                     save_checkpoint(checkpoint_file, predictions, targets, all_generations, completed_indices)
                     raise
+            
+            # Close progress bar
+            pbar.close()
 
         # Final checkpoint save
         save_checkpoint(checkpoint_file, predictions, targets, all_generations, completed_indices)

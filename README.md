@@ -32,6 +32,9 @@ python main.py --tasks mistake_location.yaml --provider completion_api --model_a
 python main.py --tasks mistake_correction.yaml --provider completion_api --model_args model=gpt-4o-mini-2024-07-18,api_key=<API_KEY>
 # Example with LearnLM Gemini API
 python main.py --tasks student_solution_correctness.yaml --provider gemini --model_args model==learnlm-1.5-pro-experimental,api_key=<API_KEY>
+# Example with Tinker Native Client (for large models like Kimi, Qwen)
+# See TINKER_SETUP.md for detailed instructions
+python main.py --tasks socratic_questioning.yaml --provider completion_api --model_args model=tinker://<run-id>:train:0/sampler_weights/<checkpoint>,max_tokens=512,is_chat=True,base_url=https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1 --batch_size 10
 
 ```
 - Required:
@@ -46,7 +49,7 @@ python main.py --tasks student_solution_correctness.yaml --provider gemini --mod
     - `scaffolding_generation_hard.yaml`: Task definition for scaffolding generation hard.
     - `pedagogy_following_hard.yaml`: Task definition for pedagogy following hard.
   - `--provider`: API provider to use for the task.
-    - `completion_api`: Use the completion API for the task. Support any OpenAI-type API. Use for openai and vllm models.
+    - `completion_api`: Use the completion API for the task. Support any OpenAI-type API. Use for openai and vllm models. Also supports Tinker native client for large models (see [TINKER_SETUP.md](TINKER_SETUP.md)).
     - `gemini`: Use the gemini API for the task. 
   - `--model_args`: Model arguments to pass to the API provider.
     - `base_url`: Base URL of the API provider. Empty for openai and gemini.
@@ -98,6 +101,16 @@ python visualize.py --results_dir results/
 ```bash
 pip install -r requirements.txt
 ```
+
+## Using Tinker Native Client
+
+For running benchmarks with large models (e.g., Kimi, Qwen 235B) using Tinker's native sampling client, see the detailed guide: **[TINKER_SETUP.md](TINKER_SETUP.md)**
+
+The Tinker native client provides:
+- Persistent connections optimized for large models
+- Automatic tokenizer loading from checkpoint metadata
+- Thread-safe batch processing
+- Support for both checkpoint paths and base model names
 
 ## Leaderboard
 | Model | Problem Solving | Socratic Questioning | Solution Correctness | Mistake Location | Mistake Correction | Scaffolding Win Rate | Pedagogy IF Win Rate | Scaffolding (Hard) | Pedagogy IF (Hard) |
