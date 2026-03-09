@@ -16,7 +16,6 @@ dependencies = [
     "tenacity==9.0.0",
     "tiktoken>=0.12.0",
     "tinker>=0.8.0",
-    "tinker-cookbook>=0.1.0",
     "torch==2.3.1",
     "tqdm==4.67.1",
 ]
