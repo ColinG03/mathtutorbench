@@ -138,12 +138,13 @@ class CompletionAPI(BaseLLMAPI):
         self._tokenizer_cache = None  # Cache tokenizer to avoid repeated calls
         self._tokenizer_lock = threading.Lock()  # Lock for thread-safe tokenizer initialization
         
-        # Check if we should use Tinker native client (for models with tinker:// prefix or kimi models)
+        # Check if we should use Tinker native client (for models with tinker:// prefix, kimi models,
+        # or any model when a Tinker API key is present)
         use_tinker_native = (
-            TINKER_AVAILABLE and 
-            config.api_key and 
-            config.model and 
-            (config.model.startswith('tinker://') or 'kimi' in config.model.lower())
+            TINKER_AVAILABLE and
+            config.api_key and
+            config.api_key.startswith('tml-') and
+            config.model
         )
         
         # Determine if we're using a checkpoint path or base model
