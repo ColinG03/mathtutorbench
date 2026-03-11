@@ -11,4 +11,4 @@ system_prompt: |
   Teacher (maximum two sentences): 
 ground_truth_format: ""
 few_shot_samples: ""
-stop: ["Student:", "\n\n", "Teacher:"]
+stop: ["Student:", "Teacher:"]
