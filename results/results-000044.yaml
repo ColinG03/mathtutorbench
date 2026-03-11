@@ -1,0 +1,25 @@
+mistake_correction:
+  accuracy: 0.7534930139720559
+mistake_location:
+  f1_macro: 0.006032290158302447
+  f1_micro: 0.06836327345309381
+  f1_weighted: 0.08668132175740485
+pedagogy_following:
+  match: 0.9095652173913044
+pedagogy_following_hard:
+  match: 0.9357798165137615
+problem_solving:
+  accuracy_flexible-extract: 0.8028809704321456
+  accuracy_strict-match: 0.8028809704321456
+scaffolding_generation:
+  match: 0.8939130434782608
+scaffolding_generation_hard:
+  match: 0.9174311926605505
+socratic_questioning:
+  avg_questions: 3.3931558935361217
+  bleu: 0.4763554116855723
+solution_correctness:
+  accuracy: 0.687624750499002
+  f1: 0.6916256157635468
+  precision: 0.6828793774319066
+  recall: 0.7005988023952096
