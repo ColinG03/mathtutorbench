@@ -93,10 +93,6 @@ class PreferenceDataLoader:
             formatted_data['chosen'].append(chosen_conv)
             formatted_data['rejected'].append(rejected_conv)
 
-        # print one example
-        print(formatted_data['chosen'][10])
-        print(formatted_data['rejected'][10])
-
         return Dataset.from_dict(formatted_data)  # .shuffle(seed=42)
 
     def get_evaluation_pairs(self, batch_size: int = None):
@@ -114,8 +110,8 @@ class RewardModel:
 
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_name,
-            device_map=self.device,
-            dtype=torch.float32,
+            device_map="auto",
+            dtype=torch.bfloat16,
             trust_remote_code=True,
             num_labels=1
         )
@@ -135,7 +131,7 @@ class RewardModel:
                 tokenize=True,
                 return_tensors="pt"
             ).to(self.device)
-            outputs = self.model(inputs)
+            outputs = self.model(**inputs)
             score = outputs.logits[0][0].item()
             scores.append(score)
         return scores
@@ -194,7 +190,7 @@ def evaluate_preference_accuracy(
 
     # Save results
     os.makedirs(output_dir, exist_ok=True)
-    base_name = data_path.split('/')[-1]
+    base_name = Path(data_path).name
 
     # Save metrics
     metrics_path = os.path.join(output_dir, f"{base_name}_results.json")
@@ -208,16 +204,22 @@ def evaluate_preference_accuracy(
 
     # Update results yaml file
     path = Path(args.data_path)
-    parts = path.stem.split('-')  # Split filename by '-'
-    model_name = parts[1]  # Extract model name
-    task_config_name = parts[2]  # Extract task config name
+    stem = path.stem
+    if stem.startswith("generations-"):
+        base = stem[len("generations-"):]
+        model_name, task_config_name = base.rsplit("-", 1)
+    else:
+        # Fallback: treat entire stem as task name under "final"
+        model_name = "final"
+        task_config_name = stem
 
-    results_yaml_file = "../results/" + f"results-{model_name}.yaml"
-    with open(results_yaml_file, 'r') as f:
-        data = yaml.safe_load(f)
-
-    if not data:
+    results_yaml_file = os.path.join("results", f"results-{model_name}.yaml")
+    if os.path.exists(results_yaml_file):
+        with open(results_yaml_file, 'r') as f:
+            data = yaml.safe_load(f) or {}
+    else:
         data = {}
+
     # Find the matching task config and update
     if task_config_name in data:
         data[task_config_name]['results'] = results

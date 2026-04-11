@@ -93,6 +93,10 @@ def main():
                       help='Save checkpoint every N examples')
     parser.add_argument('--batch_size', type=int, default=5,
                       help='Number of concurrent requests per batch')
+    parser.add_argument('--max_examples', type=int, default=None,
+                      help='Maximum number of examples to evaluate per task (for subset runs)')
+    parser.add_argument('--model_name', type=str, default=None,
+                      help='Override model name used for output file naming (slug)')
     args = parser.parse_args()
 
     # Parse model arguments
@@ -108,6 +112,9 @@ def main():
     # Create config and model
     config = LLMConfig(**model_args)
     model = create_llm_model(config)
+
+    # Determine output slug
+    output_slug = args.model_name if args.model_name else output_slug
 
 
     # Process each task
@@ -128,7 +135,7 @@ def main():
         task = task_cls(task_config)
 
         # Setup checkpoint file
-        checkpoint_file = output_dir / f"checkpoint-{config.model.split('/')[-1]}-{task_config.name}.json"
+        checkpoint_file = output_dir / f"checkpoint-{output_slug}-{task_config.name}.json"
         
         # Try to load checkpoint
         checkpoint = load_checkpoint(checkpoint_file)
@@ -146,7 +153,9 @@ def main():
 
         # Get all test examples
         test_examples = task.get_test_examples()
-        
+        if args.max_examples is not None:
+            test_examples = test_examples[:args.max_examples]
+
         # Filter out already completed examples
         remaining_examples = [(idx, ex) for idx, ex in enumerate(test_examples) if idx not in completed_indices]
         
@@ -246,7 +255,7 @@ def main():
         
         # Save generations file if needed
         if len(all_generations) > 0:
-            output_file = output_dir / f"generations-{config.model.split('/')[-1]}-{task_config.name}.json"
+            output_file = output_dir / f"generations-{output_slug}-{task_config.name}.json"
             with open(output_file, 'w') as f:
                 json.dump(all_generations, f, indent=2)
         
@@ -261,7 +270,7 @@ def main():
 
     print(results)
 
-    with open(output_dir / f"results-{config.model.split('/')[-1]}.yaml", 'a+') as f:
+    with open(output_dir / f"results-{output_slug}.yaml", 'a+') as f:
         yaml.dump(results, f)
 
 

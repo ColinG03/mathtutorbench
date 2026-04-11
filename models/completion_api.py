@@ -472,24 +472,23 @@ class CompletionAPI(BaseLLMAPI):
                     temperature=self.config.temperature,
                     max_tokens=self.config.max_tokens,
                     stop=stop_sequences if stop_sequences else None,
-                    stream=False
+                    stream=False,
+                    extra_body={"enable_thinking": False}
                 )
                 elapsed_time = time.time() - start_time
                 print(f"Response received in {elapsed_time:.2f}s")
                 completion = response.choices[0].message.content
                 
-                # Extract thinking tokens for Kimi/Qwen
-                if self.config.model and ('kimi' in self.config.model.lower() or 'qwen' in self.config.model.lower()):
-                    thinking_pattern = r'<think>(.*?)</think>'
-                    thinking_tokens = re.findall(thinking_pattern, completion, re.DOTALL)
-                    
-                    if thinking_tokens:
-                        print("===========================(Thinking-tokens-start)===================================")
-                        for i, thinking in enumerate(thinking_tokens, 1):
-                            print(f"Thinking token {i}:")
-                            print(thinking)
-                        print("===========================(Thinking-tokens-end)===================================")
-                        completion = re.sub(thinking_pattern, '', completion, flags=re.DOTALL).strip()
+                # Strip thinking tokens unconditionally (handles both closed and unclosed tags)
+                if '<think>' in completion:
+                    print("===========================(Thinking-tokens-start)===================================")
+                    print(completion)
+                    print("===========================(Thinking-tokens-end)===================================")
+                    # Strip closed <think>...</think> blocks
+                    completion = re.sub(r'<think>.*?</think>', '', completion, flags=re.DOTALL)
+                    # Strip unclosed <think> blocks (thinking ran to end of response)
+                    completion = re.sub(r'<think>.*$', '', completion, flags=re.DOTALL)
+                    completion = completion.strip()
                 
                 print("===========================(Response-chat-start)===================================")
                 print(completion)
